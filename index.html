@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>LockIt</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -40,6 +40,11 @@ input{
   font-size:15px;
   outline:none;
 }
+input:focus{
+  border-color:#6366f1;
+  box-shadow:0 0 0 4px rgba(99,102,241,.15);
+  background:white;
+}
 button{
   width:100%;
   padding:16px;
@@ -50,13 +55,15 @@ button{
   margin-top:10px;
   cursor:pointer;
 }
+button:hover{transform:translateY(-1px)}
 .primary{
   color:white;
   background:linear-gradient(135deg,#111827,#4f46e5);
+  box-shadow:0 15px 30px rgba(79,70,229,.25);
 }
 .secondary{background:#eef2ff;color:#3730a3}
 .hidden{display:none}
-.small{font-size:13px;color:#64748b}
+.small{font-size:13px;color:#64748b;line-height:1.45}
 .option{
   margin-top:12px;
   padding:16px;
@@ -236,7 +243,13 @@ async function createPlan(){
   $("shareLink").innerText = link;
   $("shareCard").classList.remove("hidden");
 
-  loadPlan();
+  currentPlan = plan;
+  renderPlan();
+
+  $("createCard").classList.add("hidden");
+  $("planCard").classList.remove("hidden");
+
+  listenForUpdates();
 }
 
 async function loadPlan(){
@@ -260,6 +273,7 @@ async function loadPlan(){
 
   currentPlan = data.data;
   renderPlan();
+  listenForUpdates();
 }
 
 async function savePlan(){
@@ -357,6 +371,27 @@ function renderPlan(){
   }
 }
 
+function listenForUpdates(){
+  if(!planId) return;
+
+  supabaseClient
+    .channel("plans-" + planId)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "plans",
+        filter: "id=eq." + planId
+      },
+      payload => {
+        currentPlan = payload.new.data;
+        renderPlan();
+      }
+    )
+    .subscribe();
+}
+
 function copyLink(){
   navigator.clipboard.writeText($("shareLink").innerText);
   alert("Link copied!");
@@ -365,10 +400,6 @@ function copyLink(){
 function locationWithoutQuery(){
   return window.location.origin + window.location.pathname;
 }
-
-setInterval(()=>{
-  if(planId) loadPlan();
-},3000);
 
 loadPlan();
 </script>
