@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LockIt</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 *{box-sizing:border-box;font-family:Inter,Arial,sans-serif}
@@ -17,15 +19,10 @@ body{
   color:#0f172a;
 }
 .app{max-width:480px;margin:auto;padding:22px}
-.hero{padding:25px 0}
-.logo{
-  font-size:42px;
-  font-weight:1000;
-  letter-spacing:-2px;
-}
+.logo{font-size:42px;font-weight:1000;letter-spacing:-2px;margin-top:25px}
 .tag{color:#64748b;font-size:15px;margin-top:6px}
 .card{
-  background:rgba(255,255,255,.88);
+  background:rgba(255,255,255,.9);
   backdrop-filter:blur(18px);
   border:1px solid rgba(255,255,255,.9);
   border-radius:28px;
@@ -43,11 +40,6 @@ input{
   font-size:15px;
   outline:none;
 }
-input:focus{
-  border-color:#6366f1;
-  box-shadow:0 0 0 4px rgba(99,102,241,.15);
-  background:white;
-}
 button{
   width:100%;
   padding:16px;
@@ -57,18 +49,12 @@ button{
   font-size:15px;
   margin-top:10px;
   cursor:pointer;
-  transition:.18s;
 }
-button:hover{transform:translateY(-2px)}
 .primary{
   color:white;
   background:linear-gradient(135deg,#111827,#4f46e5);
-  box-shadow:0 15px 30px rgba(79,70,229,.28);
 }
-.secondary{
-  background:#eef2ff;
-  color:#3730a3;
-}
+.secondary{background:#eef2ff;color:#3730a3}
 .hidden{display:none}
 .small{font-size:13px;color:#64748b}
 .option{
@@ -130,18 +116,16 @@ label input{width:auto}
   border-radius:999px;
   font-size:12px;
   font-weight:900;
-  margin:4px 4px 0 0;
 }
 </style>
 </head>
 
 <body>
+
 <div class="app">
 
-  <div class="hero">
-    <div class="logo">🔒 LockIt</div>
-    <div class="tag">Create once. Share the link. Everyone votes live.</div>
-  </div>
+  <div class="logo">🔒 LockIt</div>
+  <div class="tag">Create once. Share the link. Everyone votes live.</div>
 
   <div id="createCard" class="card">
     <h2>Create a Plan</h2>
@@ -188,40 +172,22 @@ label input{width:auto}
 
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+<script>
+const SUPABASE_URL = "https://xgotscgbwzyloxriyamr.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhnb3RzY2did3p5bG94cml5YW1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNzA0OTksImV4cCI6MjA5MjY0NjQ5OX0.04WmghiRvFlJGl0bZSMRd_OKxTCpITKZgKpEm7RHyW0";
 
-/* REPLACE THIS WITH YOUR FIREBASE CONFIG */
-const firebaseConfig = {
-  apiKey: "PASTE_YOURS_HERE",
-  authDomain: "PASTE_YOURS_HERE",
-  projectId: "PASTE_YOURS_HERE",
-  storageBucket: "PASTE_YOURS_HERE",
-  messagingSenderId: "PASTE_YOURS_HERE",
-  appId: "PASTE_YOURS_HERE"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let planId = new URLSearchParams(window.location.search).get("plan");
 let currentPlan = null;
 
 const $ = id => document.getElementById(id);
 
-window.toggleThird = function(){
+function toggleThird(){
   $("opt3").classList.toggle("hidden");
-};
+}
 
-window.createPlan = async function(){
+async function createPlan(){
   const title = $("title").value.trim();
   const location = $("location").value.trim();
   const creator = $("creator").value.trim();
@@ -241,6 +207,7 @@ window.createPlan = async function(){
   planId = crypto.randomUUID();
 
   const plan = {
+    id: planId,
     title,
     location,
     creator,
@@ -254,18 +221,59 @@ window.createPlan = async function(){
     }))
   };
 
-  await setDoc(doc(db,"plans",planId),plan);
+  const { error } = await supabaseClient
+    .from("plans")
+    .insert([{ id: planId, data: plan }]);
+
+  if(error){
+    alert("Error creating plan: " + error.message);
+    return;
+  }
 
   const link = locationWithoutQuery() + "?plan=" + planId;
-  history.pushState(null,"",link);
+  window.history.pushState(null,"",link);
 
   $("shareLink").innerText = link;
   $("shareCard").classList.remove("hidden");
 
-  listenToPlan();
-};
+  loadPlan();
+}
 
-window.vote = async function(index,type){
+async function loadPlan(){
+  if(!planId) return;
+
+  $("createCard").classList.add("hidden");
+  $("planCard").classList.remove("hidden");
+  $("shareCard").classList.remove("hidden");
+  $("shareLink").innerText = locationWithoutQuery() + "?plan=" + planId;
+
+  const { data, error } = await supabaseClient
+    .from("plans")
+    .select("*")
+    .eq("id", planId)
+    .single();
+
+  if(error || !data){
+    alert("Plan not found.");
+    return;
+  }
+
+  currentPlan = data.data;
+  renderPlan();
+}
+
+async function savePlan(){
+  const { error } = await supabaseClient
+    .from("plans")
+    .update({ data: currentPlan })
+    .eq("id", planId);
+
+  if(error){
+    alert("Save error: " + error.message);
+  }
+}
+
+async function vote(index,type){
   const name = $("voterName").value.trim();
 
   if(!name){
@@ -278,60 +286,37 @@ window.vote = async function(index,type){
     return;
   }
 
-  const options = currentPlan.options.map(opt => ({
-    ...opt,
-    yes: opt.yes.filter(n => n !== name),
-    no: opt.no.filter(n => n !== name)
-  }));
+  currentPlan.options.forEach(opt=>{
+    opt.yes = opt.yes.filter(n=>n!==name);
+    opt.no = opt.no.filter(n=>n!==name);
+  });
 
-  if(type === "yes") options[index].yes.push(name);
-  else options[index].no.push(name);
+  if(type === "yes"){
+    currentPlan.options[index].yes.push(name);
+  } else {
+    currentPlan.options[index].no.push(name);
+  }
 
-  await updateDoc(doc(db,"plans",planId),{options});
-};
+  await savePlan();
+  renderPlan();
+}
 
-window.lockPlan = async function(){
+async function lockPlan(){
   if(!currentPlan || currentPlan.locked) return;
 
   let best = currentPlan.options[0];
 
-  currentPlan.options.forEach(opt => {
+  currentPlan.options.forEach(opt=>{
     if((opt.yes.length - opt.no.length) > (best.yes.length - best.no.length)){
       best = opt;
     }
   });
 
-  await updateDoc(doc(db,"plans",planId),{
-    locked:true,
-    lockedChoice:best.text
-  });
-};
+  currentPlan.locked = true;
+  currentPlan.lockedChoice = best.text;
 
-window.copyLink = function(){
-  navigator.clipboard.writeText($("shareLink").innerText);
-  alert("Link copied!");
-};
-
-function listenToPlan(){
-  if(!planId) return;
-
-  $("createCard").classList.add("hidden");
-  $("planCard").classList.remove("hidden");
-
-  const planRef = doc(db,"plans",planId);
-
-  onSnapshot(planRef,snap=>{
-    if(!snap.exists()){
-      alert("Plan not found.");
-      return;
-    }
-
-    currentPlan = snap.data();
-    renderPlan();
-  });
-
-  $("shareLink").innerText = locationWithoutQuery() + "?plan=" + planId;
-  $("shareCard").classList.remove("hidden");
+  await savePlan();
+  renderPlan();
 }
 
 function renderPlan(){
@@ -372,13 +357,21 @@ function renderPlan(){
   }
 }
 
+function copyLink(){
+  navigator.clipboard.writeText($("shareLink").innerText);
+  alert("Link copied!");
+}
+
 function locationWithoutQuery(){
   return window.location.origin + window.location.pathname;
 }
 
-if(planId){
-  listenToPlan();
-}
+setInterval(()=>{
+  if(planId) loadPlan();
+},3000);
+
+loadPlan();
 </script>
+
 </body>
 </html>
