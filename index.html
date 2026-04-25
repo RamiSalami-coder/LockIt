@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LockIt</title>
+
+<style>
+*{box-sizing:border-box;font-family:Inter,Arial,sans-serif}
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at top left,#c7d2fe,transparent 35%),
+    radial-gradient(circle at top right,#fbcfe8,transparent 35%),
+    linear-gradient(135deg,#f8fafc,#eef2ff);
+  color:#0f172a;
+}
+.app{max-width:480px;margin:auto;padding:22px}
+.hero{padding:25px 0}
+.logo{
+  font-size:42px;
+  font-weight:1000;
+  letter-spacing:-2px;
+}
+.tag{color:#64748b;font-size:15px;margin-top:6px}
+.card{
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,.9);
+  border-radius:28px;
+  padding:22px;
+  margin-top:16px;
+  box-shadow:0 20px 50px rgba(15,23,42,.12);
+}
+input{
+  width:100%;
+  padding:16px;
+  margin:8px 0;
+  border-radius:18px;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  font-size:15px;
+  outline:none;
+}
+input:focus{
+  border-color:#6366f1;
+  box-shadow:0 0 0 4px rgba(99,102,241,.15);
+  background:white;
+}
+button{
+  width:100%;
+  padding:16px;
+  border:none;
+  border-radius:18px;
+  font-weight:900;
+  font-size:15px;
+  margin-top:10px;
+  cursor:pointer;
+  transition:.18s;
+}
+button:hover{transform:translateY(-2px)}
+.primary{
+  color:white;
+  background:linear-gradient(135deg,#111827,#4f46e5);
+  box-shadow:0 15px 30px rgba(79,70,229,.28);
+}
+.secondary{
+  background:#eef2ff;
+  color:#3730a3;
+}
+.hidden{display:none}
+.small{font-size:13px;color:#64748b}
+.option{
+  margin-top:12px;
+  padding:16px;
+  border-radius:22px;
+  background:linear-gradient(135deg,#f8fafc,#eef2ff);
+  border:1px solid #e5e7eb;
+}
+.optionTop{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+}
+.voteBtns{display:flex;gap:8px}
+.voteBtns button{
+  width:48px;
+  height:48px;
+  padding:0;
+  margin:0;
+  font-size:20px;
+}
+.yes{background:#dcfce7}
+.no{background:#fee2e2}
+.locked{
+  background:linear-gradient(135deg,#111827,#4f46e5);
+  color:white;
+  padding:18px;
+  border-radius:22px;
+  margin-top:16px;
+  text-align:center;
+  font-weight:1000;
+  display:none;
+}
+.linkbox{
+  background:#f8fafc;
+  border:1px dashed #818cf8;
+  border-radius:18px;
+  padding:14px;
+  font-size:13px;
+  word-break:break-all;
+}
+label{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  background:#f8fafc;
+  border-radius:18px;
+  padding:14px;
+  margin-top:8px;
+}
+label input{width:auto}
+.badge{
+  display:inline-block;
+  background:#eef2ff;
+  color:#3730a3;
+  padding:7px 11px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+  margin:4px 4px 0 0;
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <div class="hero">
+    <div class="logo">🔒 LockIt</div>
+    <div class="tag">Create once. Share the link. Everyone votes live.</div>
+  </div>
+
+  <div id="createCard" class="card">
+    <h2>Create a Plan</h2>
+
+    <input id="title" placeholder="Plan name">
+    <input id="location" placeholder="Location">
+
+    <input id="opt1" placeholder="Time option 1">
+    <input id="opt2" placeholder="Time option 2">
+
+    <button class="secondary" onclick="toggleThird()">+ Add 3rd option</button>
+    <input id="opt3" class="hidden" placeholder="Time option 3">
+
+    <input id="creator" placeholder="Your name">
+
+    <label>
+      <input type="checkbox" id="ride">
+      I can provide a ride 🚗
+    </label>
+
+    <button class="primary" onclick="createPlan()">Create Plan</button>
+  </div>
+
+  <div id="shareCard" class="card hidden">
+    <h3>Share this link</h3>
+    <div id="shareLink" class="linkbox"></div>
+    <button class="secondary" onclick="copyLink()">Copy Link</button>
+  </div>
+
+  <div id="planCard" class="card hidden">
+    <span class="badge">Live Plan</span>
+    <h2 id="showTitle"></h2>
+    <p id="showLocation" class="small"></p>
+    <p id="showRide" class="small"></p>
+
+    <input id="voterName" placeholder="Your name to vote">
+
+    <div id="options"></div>
+
+    <button class="primary" onclick="lockPlan()">Lock Best Plan</button>
+  </div>
+
+  <div id="lockedBox" class="locked"></div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* REPLACE THIS WITH YOUR FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "PASTE_YOURS_HERE",
+  authDomain: "PASTE_YOURS_HERE",
+  projectId: "PASTE_YOURS_HERE",
+  storageBucket: "PASTE_YOURS_HERE",
+  messagingSenderId: "PASTE_YOURS_HERE",
+  appId: "PASTE_YOURS_HERE"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let planId = new URLSearchParams(window.location.search).get("plan");
+let currentPlan = null;
+
+const $ = id => document.getElementById(id);
+
+window.toggleThird = function(){
+  $("opt3").classList.toggle("hidden");
+};
+
+window.createPlan = async function(){
+  const title = $("title").value.trim();
+  const location = $("location").value.trim();
+  const creator = $("creator").value.trim();
+  const ride = $("ride").checked;
+
+  const rawOptions = [
+    $("opt1").value.trim(),
+    $("opt2").value.trim(),
+    $("opt3").value.trim()
+  ].filter(Boolean);
+
+  if(!title || !creator || rawOptions.length < 2){
+    alert("Add a title, your name, and at least 2 time options.");
+    return;
+  }
+
+  planId = crypto.randomUUID();
+
+  const plan = {
+    title,
+    location,
+    creator,
+    ride,
+    locked:false,
+    lockedChoice:"",
+    options: rawOptions.map(text => ({
+      text,
+      yes:[],
+      no:[]
+    }))
+  };
+
+  await setDoc(doc(db,"plans",planId),plan);
+
+  const link = locationWithoutQuery() + "?plan=" + planId;
+  history.pushState(null,"",link);
+
+  $("shareLink").innerText = link;
+  $("shareCard").classList.remove("hidden");
+
+  listenToPlan();
+};
+
+window.vote = async function(index,type){
+  const name = $("voterName").value.trim();
+
+  if(!name){
+    alert("Enter your name first.");
+    return;
+  }
+
+  if(currentPlan.locked){
+    alert("This plan is locked.");
+    return;
+  }
+
+  const options = currentPlan.options.map(opt => ({
+    ...opt,
+    yes: opt.yes.filter(n => n !== name),
+    no: opt.no.filter(n => n !== name)
+  }));
+
+  if(type === "yes") options[index].yes.push(name);
+  else options[index].no.push(name);
+
+  await updateDoc(doc(db,"plans",planId),{options});
+};
+
+window.lockPlan = async function(){
+  if(!currentPlan || currentPlan.locked) return;
+
+  let best = currentPlan.options[0];
+
+  currentPlan.options.forEach(opt => {
+    if((opt.yes.length - opt.no.length) > (best.yes.length - best.no.length)){
+      best = opt;
+    }
+  });
+
+  await updateDoc(doc(db,"plans",planId),{
+    locked:true,
+    lockedChoice:best.text
+  });
+};
+
+window.copyLink = function(){
+  navigator.clipboard.writeText($("shareLink").innerText);
+  alert("Link copied!");
+};
+
+function listenToPlan(){
+  if(!planId) return;
+
+  $("createCard").classList.add("hidden");
+  $("planCard").classList.remove("hidden");
+
+  const planRef = doc(db,"plans",planId);
+
+  onSnapshot(planRef,snap=>{
+    if(!snap.exists()){
+      alert("Plan not found.");
+      return;
+    }
+
+    currentPlan = snap.data();
+    renderPlan();
+  });
+
+  $("shareLink").innerText = locationWithoutQuery() + "?plan=" + planId;
+  $("shareCard").classList.remove("hidden");
+}
+
+function renderPlan(){
+  $("showTitle").innerText = currentPlan.title;
+  $("showLocation").innerText = "📍 " + (currentPlan.location || "No location");
+  $("showRide").innerText = currentPlan.ride
+    ? "🚗 " + currentPlan.creator + " can provide a ride"
+    : "No ride offered";
+
+  $("options").innerHTML = "";
+
+  currentPlan.options.forEach((opt,i)=>{
+    $("options").innerHTML += `
+      <div class="option">
+        <div class="optionTop">
+          <div>
+            <strong>${opt.text}</strong><br>
+            <span class="small">👍 ${opt.yes.length} yes · 👎 ${opt.no.length} no</span>
+          </div>
+          <div class="voteBtns">
+            <button class="yes" onclick="vote(${i},'yes')">👍</button>
+            <button class="no" onclick="vote(${i},'no')">👎</button>
+          </div>
+        </div>
+        <p class="small">
+          <b>Yes:</b> ${opt.yes.join(", ") || "none"}<br>
+          <b>No:</b> ${opt.no.join(", ") || "none"}
+        </p>
+      </div>
+    `;
+  });
+
+  if(currentPlan.locked){
+    $("lockedBox").style.display = "block";
+    $("lockedBox").innerText = "🔒 Locked Plan: " + currentPlan.lockedChoice;
+  } else {
+    $("lockedBox").style.display = "none";
+  }
+}
+
+function locationWithoutQuery(){
+  return window.location.origin + window.location.pathname;
+}
+
+if(planId){
+  listenToPlan();
+}
+</script>
+</body>
+</html>
